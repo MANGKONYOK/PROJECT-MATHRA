@@ -1,0 +1,59 @@
+services:
+  # The Guardian - FastAPI Reverse Proxy Gateway
+  guardian-gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mathra-guardian
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - PROXY_HOST=0.0.0.0
+      - PROXY_PORT=8000
+      - LOG_LEVEL=INFO
+      - DATABASE_URL=sqlite+aiosqlite:///./backend/data/mathra_events.db
+      - SIMULATION_MODE=true
+    volumes:
+      - mathra-data:/app/backend/data
+      - mathra-reports:/app/redteam/reports
+    networks:
+      - mathra-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  # SOC Command Center - Streamlit Dashboard
+  soc-dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mathra-soc
+    restart: unless-stopped
+    command: ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0"]
+    ports:
+      - "8501:8501"
+    environment:
+      - PROXY_HOST=guardian-gateway
+      - PROXY_PORT=8000
+      - DATABASE_URL=sqlite+aiosqlite:///./backend/data/mathra_events.db
+    volumes:
+      - mathra-data:/app/backend/data
+      - mathra-reports:/app/redteam/reports
+    depends_on:
+      guardian-gateway:
+        condition: service_healthy
+    networks:
+      - mathra-network
+
+volumes:
+  mathra-data:
+    driver: local
+  mathra-reports:
+    driver: local
+
+networks:
+  mathra-network:
+    driver: bridge
